@@ -30,15 +30,68 @@ def compute_points_mat(src_points, target_points):
     return A 
 
 
+
 def compute_homography_mat(src_points, target_points):
     A = compute_points_mat(src_points, target_points)
     b = np.ndarray.flatten(np.array(target_points))
     
     H = np.linalg.lstsq(A, b,None)[0]
-    print(H.shape) # should be 2n x 1
     H = np.concatenate([H,[1]])
     H = H.reshape(3,3)
     return H
+
+
+def get_inliers(src_points, target_points):
+    """
+    Returns a list of inliers and a list of outliers using RANSAC.
+    """
+    assert len(src_points) == len(target_points)
+
+    src_points = np.concatenate([np.array(p) for p in src_points if type(p) != np.ndarray])
+    target_points = np.concatenate([np.array(p) for p in target_points if type(p) != np.ndarray])
+    
+    s = 4
+    N = int(np.log10(1-0.99)/np.log10((1-(1-0.05)**s)))
+    T  = min(len(src_points), 6)
+    d = 10
+
+    samples_indices_history = []
+    num_inliers_history = []
+
+    for _ in range(N):
+        indices = np.random.choice(len(src_points), s, replace=False)
+        samples_indices_history.append(indices)
+        src_samples = src_points[indices]
+        target_samples = target_points[indices]
+        H = compute_homography_mat(src_samples, target_samples)
+
+        outside_indices = np.array(list(set(range(len(src_points))) - set(src_samples)) )
+
+        mapped_points = src_points[outside_indices].dot(H.T)
+        mapped_points[:,:-1] /= mapped_points[:,-1]
+        mapped_points = mapped_points[:,:-1]
+
+        dist = np.linalg.norm(mapped_points - target_points[outside_indices], axis=1)
+        inlier_indices = np.where(dist <= d)[0]
+        num_inliers_history.append(len(inlier_indices))
+
+        if num_inliers_history[-1] >= T:
+            
+
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
 
 def transform_point(point, H):
     if type(point) == list or type(point) == tuple:
@@ -49,6 +102,9 @@ def transform_point(point, H):
     mapped_point = scaler * np.dot(H[0:2,:], point_hom)
 
     return mapped_point
+
+
+
 
 
 
@@ -81,12 +137,11 @@ def warp_image(image, H):
    
     u_range = np.arange(image.shape[1])
     v_range = np.arange(image.shape[0])
-    print(min_u,min_v)
-    print(max_u, max_v)
+
 
     # the spline describing a continuous interpolation of the image.
     target_image = np.zeros((max_v-min_v, max_u-min_u,3))
-    print(target_image.shape)
+
     for channel in range(3):
         I_cont = RectBivariateSpline(v_range, u_range, image[:,:,channel])
 
