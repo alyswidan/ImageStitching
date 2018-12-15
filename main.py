@@ -15,6 +15,7 @@ def get_points(image, n=4):
 def compute_points_mat(src_points, target_points):
     A = np.empty((2*len(src_points), 8))
     row=0
+
     for (x_s,y_s),(x_t,y_t) in zip(src_points, target_points):
         
         A[row,0] = A[row+1,3] = x_s
@@ -41,14 +42,25 @@ def compute_homography_mat(src_points, target_points):
     return H
 
 
+def transform_points(points, H):
+    ones = np.ones((points.shape[0], 1))
+    points = np.concatenate([points, ones], 1)
+
+    mapped_points = np.dot(points, H.T)
+    mapped_points[:,:-1] /= np.expand_dims(mapped_points[:,-1],1)
+    mapped_points = mapped_points[:,:-1]
+
+    return mapped_points
+
+
 def get_inliers(src_points, target_points):
     """
-    Returns a list of inliers and a list of outliers using RANSAC.
+    returns inliers    
     """
     assert len(src_points) == len(target_points)
-
-    src_points = np.concatenate([np.array(p) for p in src_points if type(p) != np.ndarray])
-    target_points = np.concatenate([np.array(p) for p in target_points if type(p) != np.ndarray])
+    print([np.expand_dims(np.array(p),1) for p in src_points if type(p) != np.ndarray][0].shape)
+    src_points = np.concatenate([np.expand_dims(np.array(p),0) for p in src_points if type(p) != np.ndarray],0)
+    target_points = np.concatenate([np.expand_dims(np.array(p),0) for p in target_points if type(p) != np.ndarray],0)
     
     s = 4
     N = int(np.log10(1-0.99)/np.log10((1-(1-0.05)**s)))
@@ -58,9 +70,8 @@ def get_inliers(src_points, target_points):
     samples_indices_history = []
     num_inliers_history = []
 
-
     def _get_inlier_indices(indices):
-
+        
         H = compute_homography_mat(src_points[indices], target_points[indices])
 
         outside_indices = np.array([i for i in range(len(src_points)) if i not in set(indices)])
@@ -86,6 +97,11 @@ def get_inliers(src_points, target_points):
             
     samples_indices_history = np.array(samples_indices_history)
     num_inliers_history = np.array(num_inliers_history)
+    best_indices = samples_indices_history[np.argmax(num_inliers_history)]
+
+    return src_points[best_indices], target_points[best_indices]
+
+
 
 def transform_point(point, H):
     if type(point) == list or type(point) == tuple:
@@ -96,18 +112,6 @@ def transform_point(point, H):
     mapped_point = scaler * np.dot(H[0:2,:], point_hom)
 
     return mapped_point
-
-def transform_points(points, H):
-    ones = np.ones((points.shape[0], 1))
-    points = np.concatenate([points, ones], 1)
-
-    mapped_points = np.dot(points, H.T)
-    mapped_points[:,:-1] /= np.expand_dims(mapped_points[:,-1],1)
-    mapped_points = mapped_points[:,:-1]
-
-    return mapped_points
-
-
 
 
 def transform_image(u_range, v_range, H):
@@ -190,7 +194,10 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True)
         image_1_points = get_points(image_1, correspondance_points)
         image_2_points = get_points(image_2, correspondance_points)
 
- 
+    inlier_src, inlier_target = get_inliers(image_1_points, image_2_points)
+
+    print(inlier_src)
+    print(inlier_target)
 
     H = compute_homography_mat(image_1_points, image_2_points)
 
