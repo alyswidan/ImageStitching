@@ -65,9 +65,7 @@ def get_inliers(src_points, target_points):
 
         outside_indices = np.array([i for i in range(len(src_points)) if i not in set(indices)])
         
-        mapped_points = src_points[outside_indices].dot(H.T)
-        mapped_points[:,:-1] /= mapped_points[:,-1]
-        mapped_points = mapped_points[:,:-1]
+        mapped_points = transform_points(src_points[outside_indices], H)
 
         dist = np.linalg.norm(mapped_points - target_points[outside_indices], axis=1)
         inlier_indices = np.where(dist <= d)[0]
@@ -86,7 +84,8 @@ def get_inliers(src_points, target_points):
             samples_indices_history.append(new_indices)
             num_inliers_history.append(_get_inlier_indices(new_indices))
             
-
+    samples_indices_history = np.array(samples_indices_history)
+    num_inliers_history = np.array(num_inliers_history)
 
 def transform_point(point, H):
     if type(point) == list or type(point) == tuple:
@@ -98,19 +97,27 @@ def transform_point(point, H):
 
     return mapped_point
 
-def transform_image(u_range, v_range, H):
-    grid_u, grid_v = np.meshgrid( u_range, v_range )
-
-    u_flat = np.expand_dims(np.ndarray.flatten(grid_u), 1)
-    v_flat = np.expand_dims(np.ndarray.flatten(grid_v), 1)
-
-    points = np.concatenate([u_flat, v_flat, np.ones_like(u_flat)], 1)
+def transform_points(points, H):
+    ones = np.ones((points.shape[0], 1))
+    points = np.concatenate([points, ones], 1)
 
     mapped_points = np.dot(points, H.T)
     mapped_points[:,:-1] /= np.expand_dims(mapped_points[:,-1],1)
     mapped_points = mapped_points[:,:-1]
 
-    return points, mapped_points
+    return mapped_points
+
+
+
+
+def transform_image(u_range, v_range, H):
+    grid_u, grid_v = np.meshgrid( u_range, v_range )
+
+    u_flat = np.expand_dims(np.ndarray.flatten(grid_u), 1)
+    v_flat = np.expand_dims(np.ndarray.flatten(grid_v), 1)
+    points = np.concatenate([u_flat, v_flat],1)
+    
+    return points, transform_points(points, H)
 
 
 def warp_image(image, H):
@@ -129,8 +136,6 @@ def warp_image(image, H):
     max_u=int(np.max(transformed_image[:,0]))
     min_v=int(np.min(transformed_image[:,1]))
     max_v=int(np.max(transformed_image[:,1]))
-
-
 
     mapped_u_range = np.arange(min_u, max_u)
     mapped_v_range = np.arange(min_v, max_v)
