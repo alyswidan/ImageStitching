@@ -58,14 +58,14 @@ def get_inliers(src_points, target_points):
     returns inliers    
     """
     assert len(src_points) == len(target_points)
-    print([np.expand_dims(np.array(p),1) for p in src_points if type(p) != np.ndarray][0].shape)
     src_points = np.concatenate([np.expand_dims(np.array(p),0) for p in src_points if type(p) != np.ndarray],0)
     target_points = np.concatenate([np.expand_dims(np.array(p),0) for p in target_points if type(p) != np.ndarray],0)
     
     s = 4
-    N = int(np.log10(1-0.99)/np.log10((1-(1-0.05)**s)))
-    T  = min(len(src_points), 6)
-    d = 10
+    #N = int(np.log10(1-0.99)/np.log10((1-(1-0.4)**s)))
+    N = 2000
+    T  = min(len(src_points), 10)
+    d = 5
 
     samples_indices_history = []
     num_inliers_history = []
@@ -74,31 +74,37 @@ def get_inliers(src_points, target_points):
         
         H = compute_homography_mat(src_points[indices], target_points[indices])
 
-        outside_indices = np.array([i for i in range(len(src_points)) if i not in set(indices)])
+        # outside_indices = np.array([i for i in range(len(src_points)) if i not in set(indices)])
         
-        mapped_points = transform_points(src_points[outside_indices], H)
+        mapped_points = transform_points(src_points, H)
 
-        dist = np.linalg.norm(mapped_points - target_points[outside_indices], axis=1)
+        dist = np.linalg.norm(mapped_points - target_points, axis=1)
+        print(dist)
         inlier_indices = np.where(dist <= d)[0]
+        print(inlier_indices)
         return inlier_indices
+    
+    print('N:', N)
 
     for _ in range(N):
         indices = np.random.choice(len(src_points), s, replace=False)
-        samples_indices_history.append(indices)
+        #samples_indices_history.append(indices)
         
         inlier_indices = _get_inlier_indices(indices)
-        
+        samples_indices_history.append(inlier_indices)
         num_inliers_history.append(len(inlier_indices))
 
         if num_inliers_history[-1] >= T:
-            new_indices = np.concatenate([indices, inlier_indices])
-            samples_indices_history.append(new_indices)
-            num_inliers_history.append(_get_inlier_indices(new_indices))
+            inlier_indices = _get_inlier_indices(inlier_indices)
+            samples_indices_history.append(inlier_indices)
+            num_inliers_history.append(len(inlier_indices))
             
+
     samples_indices_history = np.array(samples_indices_history)
+    print(num_inliers_history)
     num_inliers_history = np.array(num_inliers_history)
     best_indices = samples_indices_history[np.argmax(num_inliers_history)]
-
+    print(num_inliers_history)
     return src_points[best_indices], target_points[best_indices]
 
 
@@ -143,13 +149,15 @@ def warp_image(image, H):
 
     mapped_u_range = np.arange(min_u, max_u)
     mapped_v_range = np.arange(min_v, max_v)
+    print(max_v-min_v, max_u-min_u)
+    
 
     target_image = np.zeros((max_v-min_v, max_u-min_u,3))
 
 
     transformed_points, inv_transformed_image = transform_image(mapped_u_range, mapped_v_range, H_inv)
 
-    def fill_channel(target, channel, batch_size=8192):
+    def fill_channel(target, channel, batch_size=64):
         I_cont = RectBivariateSpline(orig_v_range, orig_u_range, image[:,:,channel])
 
         n_iters =int( len(inv_transformed_image) / batch_size )
@@ -183,23 +191,40 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True)
 
     image_1_name = path_1.split('/')[-1].split('.')[0]
     image_2_name = path_2.split('/')[-1].split('.')[0]
-    try:
+    
+    if load:
         with open(f'{image_1_name}.pkl', 'rb') as f:
             image_1_points = pickle.load(f)
-        
+
         with open(f'{image_2_name}.pkl', 'rb') as f:
             image_2_points = pickle.load(f)
-        
-    except:
+
+    else:
         image_1_points = get_points(image_1, correspondance_points)
         image_2_points = get_points(image_2, correspondance_points)
+    
+    if save:
+        with open(f'{image_1_name}.pkl', 'wb+') as f:
+            pickle.dump(image_1_points,f)
+
+        with open(f'{image_2_name}.pkl', 'wb+') as f:
+            pickle.dump(image_2_points, f)
 
     inlier_src, inlier_target = get_inliers(image_1_points, image_2_points)
 
-    print(inlier_src)
-    print(inlier_target)
+    print(inlier_src[:,0])
+    print(inlier_target[:,0])
 
-    H = compute_homography_mat(image_1_points, image_2_points)
+    fig, axs = plt.subplots(1,2)
+    axs[0].imshow(image_1)
+    axs[0].scatter(inlier_src[:,0], inlier_src[:,1])
+    axs[1].imshow(image_2)
+    axs[1].scatter(inlier_target[:,0], inlier_target[:,1])
+    plt.show()
+
+
+
+    H = compute_homography_mat(inlier_src, inlier_target)
 
 
 
@@ -211,14 +236,17 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True)
 
 
     res[:warpped_image_1.shape[0], :warpped_image_1.shape[1], :] = warpped_image_1
+    print(min_u, min_v)
 
-    res[-min_v:-min_v + image_2.shape[0], -min_u:-min_u + image_2.shape[1], :] = image_2
+    shift_u = -min_u if min_u<0 else 0
+    shift_v = -min_v if min_v<0 else 0
+    res[shift_v:image_2.shape[0] + shift_v, shift_u:image_2.shape[1] + shift_u, :] = image_2
 
 
     return res
 
 
-res = stitch_images('b1.png','b2.png' )
+res = stitch_images('b1_copy.png','b2_copy.png' , 15)
 
 plt.imshow(res)
 plt.show()
