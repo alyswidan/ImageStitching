@@ -98,9 +98,19 @@ def transform_point(point, H):
 
     return mapped_point
 
+def transform_image(u_range, v_range, H):
+    grid_u, grid_v = np.meshgrid( u_range, v_range )
 
+    u_flat = np.expand_dims(np.ndarray.flatten(grid_u), 1)
+    v_flat = np.expand_dims(np.ndarray.flatten(grid_v), 1)
 
+    points = np.concatenate([u_flat, v_flat, np.ones_like(u_flat)], 1)
 
+    mapped_points = np.dot(points, H.T)
+    mapped_points[:,:-1] /= np.expand_dims(mapped_points[:,-1],1)
+    mapped_points = mapped_points[:,:-1]
+
+    return points, mapped_points
 
 
 def warp_image(image, H):
@@ -109,51 +119,47 @@ def warp_image(image, H):
     # u == x
     # v == y
     
-    # top_left = transform_point([0,0],H)
-    # bottom_right = transform_point([image.shape[0],image.shape[1]], H)
-    min_u = np.inf
-    min_v = np.inf
-    max_u = 0
-    max_v = 0
-    for v in range(image.shape[0]):
-        for u in range(image.shape[1]):
-            mapped_point = transform_point([u,v], H)
-            min_u = min(mapped_point[0],min_u)
-            min_v = min(mapped_point[1],min_v)
-            max_u = max(mapped_point[0],max_u)
-            max_v = max(mapped_point[1],max_v)
 
-
-            
-    min_u = int(min_u)
-    min_v = int(min_v)
-    max_u = int(max_u)
-    max_v = int(max_v)
-   
     orig_u_range = np.arange(image.shape[1])
     orig_v_range = np.arange(image.shape[0])
-    mapped_u_range = np.arange(min_u,max_u)
+
+    orig_points, transformed_image, = transform_image(orig_u_range, orig_v_range, H)
     
+    min_u=int(np.min(transformed_image[:,0]))
+    max_u=int(np.max(transformed_image[:,0]))
+    min_v=int(np.min(transformed_image[:,1]))
+    max_v=int(np.max(transformed_image[:,1]))
 
 
-    # the spline describing a continuous interpolation of the image.
+
+    mapped_u_range = np.arange(min_u, max_u)
+    mapped_v_range = np.arange(min_v, max_v)
+
     target_image = np.zeros((max_v-min_v, max_u-min_u,3))
 
 
+    transformed_points, inv_transformed_image = transform_image(mapped_u_range, mapped_v_range, H_inv)
 
+    def fill_channel(target, channel, batch_size=8192):
+        I_cont = RectBivariateSpline(orig_v_range, orig_u_range, image[:,:,channel])
 
+        n_iters =int( len(inv_transformed_image) / batch_size )
+        
+        for i in range(n_iters + 1):
+            start = i * batch_size
+            end = (i+1) * batch_size
+            
+            mapped_u_batch = inv_transformed_image[start:end, 0].ravel()
+            mapped_v_batch = inv_transformed_image[start:end, 1].ravel()
+            
+            u_batch = transformed_points[start:end, 0].ravel()
+            v_batch = transformed_points[start:end, 1].ravel()
 
+            target[v_batch-min_v, u_batch-min_u, channel] = I_cont(mapped_v_batch, mapped_u_batch, grid=False)
 
-    for channel in range(3):
-        I_cont = RectBivariateSpline(v_range, u_range, image[:,:,channel])
-
-        for v in np.arange(min_v,max_v):
-            for u in np.arange(min_u,max_u):
-                point = np.array([u,v])
-                mapped_u, mapped_v = transform_point(point, H_inv)
-                target_image[v-min_v,u-min_u,channel] = I_cont(mapped_v, mapped_u)
-
-                # print(f'mapped {u},{v} to {mapped_u}, {mapped_v}')
+    fill_channel(target_image, 0)
+    fill_channel(target_image, 1)
+    fill_channel(target_image, 2)
 
     return target_image, min_u, min_v
                 
@@ -165,6 +171,7 @@ def read_image(path):
 def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True):
     image_1 = read_image(path_1)
     image_2 = read_image(path_2)
+
     image_1_name = path_1.split('/')[-1].split('.')[0]
     image_2_name = path_2.split('/')[-1].split('.')[0]
     try:
@@ -181,6 +188,8 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True)
  
 
     H = compute_homography_mat(image_1_points, image_2_points)
+
+
 
     warpped_image_1, min_u, min_v = warp_image(image_1, H)
 
