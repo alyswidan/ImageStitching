@@ -58,39 +58,34 @@ def get_inliers(src_points, target_points):
     samples_indices_history = []
     num_inliers_history = []
 
-    for _ in range(N):
-        indices = np.random.choice(len(src_points), s, replace=False)
-        samples_indices_history.append(indices)
-        src_samples = src_points[indices]
-        target_samples = target_points[indices]
-        H = compute_homography_mat(src_samples, target_samples)
 
-        outside_indices = np.array(list(set(range(len(src_points))) - set(src_samples)) )
+    def _get_inlier_indices(indices):
 
+        H = compute_homography_mat(src_points[indices], target_points[indices])
+
+        outside_indices = np.array([i for i in range(len(src_points)) if i not in set(indices)])
+        
         mapped_points = src_points[outside_indices].dot(H.T)
         mapped_points[:,:-1] /= mapped_points[:,-1]
         mapped_points = mapped_points[:,:-1]
 
         dist = np.linalg.norm(mapped_points - target_points[outside_indices], axis=1)
         inlier_indices = np.where(dist <= d)[0]
+        return inlier_indices
+
+    for _ in range(N):
+        indices = np.random.choice(len(src_points), s, replace=False)
+        samples_indices_history.append(indices)
+        
+        inlier_indices = _get_inlier_indices(indices)
+        
         num_inliers_history.append(len(inlier_indices))
 
         if num_inliers_history[-1] >= T:
+            new_indices = np.concatenate([indices, inlier_indices])
+            samples_indices_history.append(new_indices)
+            num_inliers_history.append(_get_inlier_indices(new_indices))
             
-
-
-        
-
-
-
-
-
-
-
-
-
-
-
 
 
 def transform_point(point, H):
@@ -135,12 +130,19 @@ def warp_image(image, H):
     max_u = int(max_u)
     max_v = int(max_v)
    
-    u_range = np.arange(image.shape[1])
-    v_range = np.arange(image.shape[0])
+    orig_u_range = np.arange(image.shape[1])
+    orig_v_range = np.arange(image.shape[0])
+    mapped_u_range = np.arange(min_u,max_u)
+    
 
 
     # the spline describing a continuous interpolation of the image.
     target_image = np.zeros((max_v-min_v, max_u-min_u,3))
+
+
+
+
+
 
     for channel in range(3):
         I_cont = RectBivariateSpline(v_range, u_range, image[:,:,channel])
