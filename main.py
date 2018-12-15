@@ -181,9 +181,10 @@ def warp_image(image, H):
     return target_image, min_u, min_v
                 
 def read_image(path):
-    img = plt.imread(path)
+   # img = plt.imread(path)
+    img = cv.imread(path, cv.IMREAD_COLOR)
     print(img.shape)
-    return img[:,:,:-1]
+    return img
 
 def automatic_intrest_points_detector(image1, image2, N):
     ###
@@ -196,11 +197,15 @@ def automatic_intrest_points_detector(image1, image2, N):
     # get key points and descriptors from the 2 images
     kps1, descs1 = orb.detectAndCompute(image1, None)
     kps2, descs2 = orb.detectAndCompute(image2, None)
-    print(kps1)
     # brute force matcher
     bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
     matches = bf.match(descs1, descs2)
     matches = sorted(matches, key=lambda x:x.distance)
+    out = np.zeros((image2.shape[0] + image1.shape[0], image2.shape[1] + image1.shape[1]))
+    outImage = cv.drawMatches(image1, kps1, image2, kps2, matches[:20], outImg=out,flags=1)
+
+    plt.imshow(out)
+    plt.show()
     list_kps1 = [kps1[mat.queryIdx].pt for mat in matches[:N]]
     list_kps2 = [kps2[mat.trainIdx].pt for mat in matches[:N]]
 
@@ -227,6 +232,9 @@ def stitch_images(path_1, path_2, correspondance_points=5, auto=True ,save=True,
              image_1_points = get_points(image_1, correspondance_points)
              image_2_points = get_points(image_2, correspondance_points)
     
+    image_1 = image_2[...,::-1]
+    image_2 = image_2[...,::-1]
+
     if save:
         with open(f'{image_1_name}.pkl', 'wb+') as f:
             pickle.dump(image_1_points,f)
@@ -234,21 +242,21 @@ def stitch_images(path_1, path_2, correspondance_points=5, auto=True ,save=True,
         with open(f'{image_2_name}.pkl', 'wb+') as f:
             pickle.dump(image_2_points, f)
 
-    inlier_src, inlier_target = get_inliers(image_1_points, image_2_points)
+    # inlier_src, inlier_target = get_inliers(image_1_points, image_2_points)
 
-    print(inlier_src[:,0])
-    print(inlier_target[:,0])
+   # print(inlier_src[:,0])
+   # print(inlier_target[:,0])
 
-    fig, axs = plt.subplots(1,2)
-    axs[0].imshow(image_1)
-    axs[0].scatter(inlier_src[:,0], inlier_src[:,1])
-    axs[1].imshow(image_2)
-    axs[1].scatter(inlier_target[:,0], inlier_target[:,1])
-    plt.show()
+    #fig, axs = plt.subplots(1,2)
+    #axs[0].imshow(image_1)
+    #axs[0].scatter(inlier_src[:,0], inlier_src[:,1])
+    #axs[1].imshow(image_2)
+    #axs[1].scatter(inlier_target[:,0], inlier_target[:,1])
+    #plt.show()
 
 
 
-    H = compute_homography_mat(inlier_src, inlier_target)
+    H = compute_homography_mat(image_1_points, image_2_points)
 
 
 
@@ -270,7 +278,7 @@ def stitch_images(path_1, path_2, correspondance_points=5, auto=True ,save=True,
     return res
 
 
-res = stitch_images('b1_copy.png','b2_copy.png' , 30, load=False)
+res = stitch_images('b1_copy.png','b2_copy.png' , 5, load=False)
 
 plt.imshow(res)
 plt.show()
