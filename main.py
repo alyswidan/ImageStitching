@@ -303,7 +303,7 @@ def automatic_intrest_points_detector(image1, image2, N=75):
     return list_kps1, list_kps2
 
 
-def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True, SIFT=False):
+def stitch_2_images(path_1, path_2, correspondance_points=5, save=True, load=True, SIFT=False):
     """
     stitches 2 images.
 
@@ -390,19 +390,37 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
     shift_v_2 = -min_v if min_v<0 else 0
     res[shift_v_2:image_2.shape[0] + shift_v_2, shift_u_2:image_2.shape[1] + shift_u_2, :] = image_2
 
+    res = res[0:np.maximum(image_1.shape[0], image_2.shape[0])+200,
+              0:np.maximum(image_1.shape[1], image_2.shape[1])+700]
+    return res
 
+def stitch_N_images(paths):
+    """
+    stitches N images.
+
+    paths : paths to N images with know order
+    
+    Returns:
+        (numpy.ndarray) : matrix of shape ((warpped_image_1.shape[0] + image_2.shape[0],
+                                            warpped_image_1.shape[1] + image_2.shape[1], 3))
+                         which is the stitched images.
+    """
+    N = len(paths)
+    for i in range(N-1):
+        res = stitch_2_images(paths[i+1], paths[i] , 100, load=False, save=False, SIFT=True)
+        name = 'images'+str(1)+str(2)+'.png'
+        paths[i] = name
+        plt.imsave(name, res)
     return res
 
 
 
-res = stitch_images('b1_copy.png','b2_copy.png' , 40, load=False, save=False, SIFT=True)
+paths = ['mount1.png', 'mount2.png', 'mount3.png'] 
+# paths = ['b1.png', 'b2.png']
+
+res = stitch_N_images(paths)
 plt.imshow(res)
 plt.show()
-# res = stitch_images('b1.png','b2.png', SIFT=True)
-
-# # cv.imwrite('MatchedUsingSIFT.jpg', res)
-# plt.imshow(res)
-# plt.show()
 
 
 
