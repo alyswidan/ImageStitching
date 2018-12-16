@@ -224,9 +224,19 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
 
     else:
         if SIFT:
-            image_1_points, image_2_points = automatic_intrest_points_detector(image1, image2, correspondance_points)
-        image_1_points = get_points(image_1, correspondance_points)
-        image_2_points = get_points(image_2, correspondance_points)
+            image_1_points, image_2_points = automatic_intrest_points_detector(image_1, image_2, correspondance_points)
+            fig, axs = plt.subplots(1,2)
+            i_1 = np.array(image_1_points)
+            i_2 = np.array(image_2_points)
+            axs[0].imshow(image_1)
+            axs[0].scatter(i_1[:,0], i_1[:,1])
+            axs[1].imshow(image_2)
+            axs[1].scatter(i_2[:,0], i_2[:,1])
+            plt.show()
+
+        else:
+            image_1_points = get_points(image_1, correspondance_points)
+            image_2_points = get_points(image_2, correspondance_points)
     
     if save:
         with open(f'{image_1_name}.pkl', 'wb+') as f:
@@ -241,7 +251,7 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
 
     inlier_src, inlier_target = get_inliers(image_1_points, image_2_points)
 
-    print(inlier_src[:,0])
+    print(len(inlier_src))
     print(inlier_target[:,0])
 
     fig, axs = plt.subplots(1,2)
@@ -277,7 +287,7 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
 
 
 
-res = stitch_images('b1_copy.png','b2_copy.png' , 15, load=False, save=False, SIFT=True)
+res = stitch_images('b1_copy.png','b2_copy.png' , 40, load=False, save=False, SIFT=True)
 plt.imshow(res)
 plt.show()
 # res = stitch_images('b1.png','b2.png', SIFT=True)
