@@ -62,10 +62,10 @@ def get_inliers(src_points, target_points):
     target_points = np.concatenate([np.expand_dims(np.array(p),0) for p in target_points if type(p) != np.ndarray],0)
     
     s = 4
-    #N = int(np.log10(1-0.99)/np.log10((1-(1-0.4)**s)))
+    # N = int(np.log10(1-0.99)/np.log10((1-(1-0.4)**s)))
     N = 2000
     T  = min(len(src_points), 10)
-    d = 5
+    d = 1
 
     samples_indices_history = []
     num_inliers_history = []
@@ -79,9 +79,9 @@ def get_inliers(src_points, target_points):
         mapped_points = transform_points(src_points, H)
 
         dist = np.linalg.norm(mapped_points - target_points, axis=1)
-        print(dist)
+        # print(dist)
         inlier_indices = np.where(dist <= d)[0]
-        print(inlier_indices)
+        # print(inlier_indices)
         return inlier_indices
     
     print('N:', N)
@@ -104,7 +104,6 @@ def get_inliers(src_points, target_points):
     print(num_inliers_history)
     num_inliers_history = np.array(num_inliers_history)
     best_indices = samples_indices_history[np.argmax(num_inliers_history)]
-    print(num_inliers_history)
     return src_points[best_indices], target_points[best_indices]
 
 
