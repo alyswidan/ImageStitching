@@ -246,7 +246,7 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True)
     return res
 
 
-res = stitch_images('b1_copy.png','b2_copy.png' , 15)
+res = stitch_images('b1_copy.png','b2_copy.png' , 15, load=True)
 
 plt.imshow(res)
 plt.show()
