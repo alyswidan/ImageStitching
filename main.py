@@ -181,8 +181,8 @@ def warp_image(image, H):
     return target_image, min_u, min_v
                 
 def read_image(path):
-    img = cv.imread(path)
-    print(img.shape)
+    # img = cv.imread(path)
+    img = cv.imread(path,1)
     return img
 
 def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True, SIFT=False):
@@ -210,6 +210,10 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
         with open(f'{image_2_name}.pkl', 'wb+') as f:
             pickle.dump(image_2_points, f)
 
+
+    image_1 = image_1[...,::-1]/255
+    image_2 = image_2[...,::-1]/255
+
     inlier_src, inlier_target = get_inliers(image_1_points, image_2_points)
 
     print(inlier_src[:,0])
@@ -233,14 +237,15 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
     res = np.zeros((warpped_image_1.shape[0] + image_2.shape[0],
                     warpped_image_1.shape[1] + image_2.shape[1], 3))
 
+    shift_u_1 = min_u if min_u>0 else 0
+    shift_v_1 = min_v if min_v>0 else 0
 
-
-    res[:warpped_image_1.shape[0], :warpped_image_1.shape[1], :] = warpped_image_1
+    res[shift_v_1:warpped_image_1.shape[0]+shift_v_1, shift_u_1:warpped_image_1.shape[1]+shift_u_1, :] = warpped_image_1
     print(min_u, min_v)
 
-    shift_u = -min_u if min_u<0 else 0
-    shift_v = -min_v if min_v<0 else 0
-    res[shift_v:image_2.shape[0] + shift_v, shift_u:image_2.shape[1] + shift_u, :] = image_2
+    shift_u_2 = -min_u if min_u<0 else 0
+    shift_v_2 = -min_v if min_v<0 else 0
+    res[shift_v_2:image_2.shape[0] + shift_v_2, shift_u_2:image_2.shape[1] + shift_u_2, :] = image_2
 
 
     return res
@@ -274,7 +279,8 @@ def automatic_intrest_points_detector(image1, image2, N=75):
 
 
 res = stitch_images('b1_copy.png','b2_copy.png' , 15, load=True)
-
+plt.imshow(res)
+plt.show()
 # res = stitch_images('b1.png','b2.png', SIFT=True)
 
 # # cv.imwrite('MatchedUsingSIFT.jpg', res)
@@ -285,35 +291,35 @@ res = stitch_images('b1_copy.png','b2_copy.png' , 15, load=True)
 
 
 
-def main():
-    building_1 = read_image('b1.png')
-    building_2 = read_image('b2.png')
+# def main():
+#     building_1 = read_image('b1.png')
+#     building_2 = read_image('b2.png')
 
-    building_1_points, building_2_points = automatic_intrest_points_detector(building_1, building_2)
-    plt.figure(1)
-    plt.imshow(building_1)
-    for point in building_1_points:
-        plt.scatter(point[0], point[1], c='red')
+#     building_1_points, building_2_points = automatic_intrest_points_detector(building_1, building_2)
+#     plt.figure(1)
+#     plt.imshow(building_1)
+#     for point in building_1_points:
+#         plt.scatter(point[0], point[1], c='red')
     
-    H = compute_homography_mat(building_1_points, building_2_points)
-    plt.figure(2)
-    plt.imshow(building_2)
-    mapped_points = []
-    for point in building_1_points:
-        mapped_point1 = transform_point(point, H)
-        # mapped_point2 = transform_point([point[0] + 500, point[1] + 500], H)
-        # mapped_point3 = transform_point([point[0] + 100, point[1] + 100], H)
+#     H = compute_homography_mat(building_1_points, building_2_points)
+#     plt.figure(2)
+#     plt.imshow(building_2)
+#     mapped_points = []
+#     for point in building_1_points:
+#         mapped_point1 = transform_point(point, H)
+#         # mapped_point2 = transform_point([point[0] + 500, point[1] + 500], H)
+#         # mapped_point3 = transform_point([point[0] + 100, point[1] + 100], H)
 
-        mapped_points.append(mapped_points)
+#         mapped_points.append(mapped_points)
         
-        plt.scatter(mapped_point1[0], mapped_point1[1], c='red')
-        # plt.scatter(mapped_point2[0], mapped_point2[1], c='blue')
-        # plt.scatter(mapped_point3[0], mapped_point3[1], c='yellow')
+#         plt.scatter(mapped_point1[0], mapped_point1[1], c='red')
+#         # plt.scatter(mapped_point2[0], mapped_point2[1], c='blue')
+#         # plt.scatter(mapped_point3[0], mapped_point3[1], c='yellow')
 
     
-    plt.show()
+#     plt.show()
 
-main()
+# main()
 
 #     try:
 #         with open('b1.pkl', 'rb') as f:
