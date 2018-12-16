@@ -4,8 +4,19 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import RectBivariateSpline
 import pickle
 
+# docstring based on this https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html
+
 
 def get_points(image, n=4):
+    """Uses ginput to take points as input.
+    Args:
+        image (numpy.ndarray) : image to take input from.
+        n (int) : number of points to take.
+
+    Returns:
+        `list` of `tuples` : The `n` points sampled from the image.
+    """
+
     plt.imshow(image)
     points = plt.ginput(n, timeout=-100)
     plt.show()
@@ -13,6 +24,21 @@ def get_points(image, n=4):
     return points
 
 def compute_points_mat(src_points, target_points):
+    """
+        Transforms a list of tuples - where src_point[i] and
+        target_points[i] correspond to the same feature viewed 
+        in 2 images - into a format suitable for solving for the 
+        homography matrix.
+
+        Args:
+            src_points(list of tuples) : points from the first image.
+            target_points(list of tuples) : points from the second image. 
+
+        Returns:
+            numpy.ndarray: matrix of shape (2 * number of points, 8)
+    """
+
+
     A = np.empty((2*len(src_points), 8))
     row=0
 
@@ -33,6 +59,19 @@ def compute_points_mat(src_points, target_points):
 
 
 def compute_homography_mat(src_points, target_points):
+    """
+        Uses the points in src_points and their corresponding points
+        target_points to compute the homography matrix between the 2 images 
+        from which the 2 lists where obtained.
+
+        Args:
+            src_points(list of tuples) : points from the first image.
+            target_points(list of tuples) : points from the second image. 
+
+        Returns:
+            numpy.ndarray : matrix of shape (3,3) which is the homgraphy matrix.
+    """
+
     A = compute_points_mat(src_points, target_points)
     b = np.ndarray.flatten(np.array(target_points))
     
@@ -43,6 +82,20 @@ def compute_homography_mat(src_points, target_points):
 
 
 def transform_points(points, H):
+    """
+        Given a matrix of points with wach row (u, v) transforms 
+        the points using H (the homography matrix).
+        Args:
+            points (numpy.ndarray) : matrix with each row being a point (u,v)
+            H : (numpy.ndarray) :  matrix with shape (3,3) describing a projective transformation in 2D.
+
+        Returns:
+            numpy.ndarray : matrix of same shape as points, where mapped_points[i] 
+                            is the mapping of points[i] using H.
+    
+    """
+
+
     ones = np.ones((points.shape[0], 1))
     points = np.concatenate([points, ones], 1)
 
@@ -53,42 +106,53 @@ def transform_points(points, H):
     return mapped_points
 
 
-def get_inliers(src_points, target_points):
+def get_inliers(src_points, target_points, d=1, s=4, N=2000, T=None):
     """
-    returns inliers    
+        Uses RANSAC to find out which pairs of points from src_points 
+        and target points is an inlier.
+
+        Args:
+            src_points(list of tuples) : points from the first image.
+            target_points(list of tuples) : points from the second image. 
+            d (float) : max distance an inlier can be at relative to the deduced transformation.
+            s (int) : number of points to sample at random to solve for H at each iteration.
+            N (int) : number of times to run the RANSAC loop.
+            T (int) : min number of inliers that need to exist so that we re-solve for the 
+                    transformation using the sampled points and the inliers.
+
+        Returns:
+            (tuple of numpy.ndarray) : (inliers in image one, their corresponding points in image two)
+
+        Note:
+            the number of returned inliers >= s. 
+
     """
     assert len(src_points) == len(target_points)
     src_points = np.concatenate([np.expand_dims(np.array(p),0) for p in src_points if type(p) != np.ndarray],0)
     target_points = np.concatenate([np.expand_dims(np.array(p),0) for p in target_points if type(p) != np.ndarray],0)
     
-    s = 4
     # N = int(np.log10(1-0.99)/np.log10((1-(1-0.4)**s)))
-    N = 2000
+
     T  = min(len(src_points), 10)
-    d = 1
 
     samples_indices_history = []
+
     num_inliers_history = []
 
     def _get_inlier_indices(indices):
         
         H = compute_homography_mat(src_points[indices], target_points[indices])
 
-        # outside_indices = np.array([i for i in range(len(src_points)) if i not in set(indices)])
         
         mapped_points = transform_points(src_points, H)
 
         dist = np.linalg.norm(mapped_points - target_points, axis=1)
-        # print(dist)
         inlier_indices = np.where(dist <= d)[0]
-        # print(inlier_indices)
         return inlier_indices
     
-    print('N:', N)
 
     for _ in range(N):
         indices = np.random.choice(len(src_points), s, replace=False)
-        #samples_indices_history.append(indices)
         
         inlier_indices = _get_inlier_indices(indices)
         samples_indices_history.append(inlier_indices)
@@ -101,25 +165,32 @@ def get_inliers(src_points, target_points):
             
 
     samples_indices_history = np.array(samples_indices_history)
-    print(num_inliers_history)
     num_inliers_history = np.array(num_inliers_history)
     best_indices = samples_indices_history[np.argmax(num_inliers_history)]
     return src_points[best_indices], target_points[best_indices]
 
 
 
-def transform_point(point, H):
-    if type(point) == list or type(point) == tuple:
-        point = np.array(point)
+def transform_grid(u_range, v_range, H):
+    """
+        Generates a grid of with u values belonging to u_range and v values 
+        belonging to v_range and transforms it using H.
+        
+        Args:
+            u_range (numpy.ndarray): vector of length (N)
+            v_range (numpy.ndarray): vector of length (M)
+            H (numpy.ndarray) : matrix of shape (3,3) used to project the grid of points.
+        
+        Returns:
+            (tuple of numpy.ndarray) : 
+                first element: points of the grid layed out in a matrix with each row representing
+                                a point (u, v)
+                second element: a matrix of the same shape as the first element where each row 
+                                represents the corresponding mapped point (u',v') using H.
+    """
 
-    point_hom = np.concatenate([point, [1]])
-    scaler = 1/(H[2,0]*point[0] + H[2,1]*point[1] + 1)
-    mapped_point = scaler * np.dot(H[0:2,:], point_hom)
-
-    return mapped_point
 
 
-def transform_image(u_range, v_range, H):
     grid_u, grid_v = np.meshgrid( u_range, v_range )
 
     u_flat = np.expand_dims(np.ndarray.flatten(grid_u), 1)
@@ -130,6 +201,23 @@ def transform_image(u_range, v_range, H):
 
 
 def warp_image(image, H):
+
+    """Warps an image using the homography matrix H.
+
+    Args:
+        image (numpy.ndarray): image to be warpped.
+        H (numpy.ndarray) : Homography matrix used to warp the image.
+    
+    Returns:
+        (tuple of numpy.ndarray, int, int):
+            first element: the warpped images.
+            second element: the minimum u corrdinate in corrdinate space not image space
+                            this means this could be a negative number, in other words 
+                            this is the amount of translation in the u diraction.
+
+            third element: minimum v corrdcinate i.e. the translation in v direction.
+    """
+
     H_inv = np.linalg.inv(H) 
     H_inv = H_inv / H_inv[2,2]
     # u == x
@@ -139,7 +227,7 @@ def warp_image(image, H):
     orig_u_range = np.arange(image.shape[1])
     orig_v_range = np.arange(image.shape[0])
 
-    orig_points, transformed_image, = transform_image(orig_u_range, orig_v_range, H)
+    _, transformed_image, = transform_grid(orig_u_range, orig_v_range, H)
     
     min_u=int(np.min(transformed_image[:,0]))
     max_u=int(np.max(transformed_image[:,0]))
@@ -148,13 +236,13 @@ def warp_image(image, H):
 
     mapped_u_range = np.arange(min_u, max_u)
     mapped_v_range = np.arange(min_v, max_v)
-    print(max_v-min_v, max_u-min_u)
+    
     
 
     target_image = np.zeros((max_v-min_v, max_u-min_u,3))
 
 
-    transformed_points, inv_transformed_image = transform_image(mapped_u_range, mapped_v_range, H_inv)
+    transformed_points, inv_transformed_image = transform_grid(mapped_u_range, mapped_v_range, H_inv)
 
     def fill_channel(target, channel, batch_size=64):
         I_cont = RectBivariateSpline(orig_v_range, orig_u_range, image[:,:,channel])
@@ -208,6 +296,23 @@ def automatic_intrest_points_detector(image1, image2, N=75):
 
 
 def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True, SIFT=False):
+    """
+    stitches 2 images.
+
+    path_1(str) : path to first image
+    path_2(str) : path to second image
+    correspondance points(int) : number of points to take from each image for pixel matching.
+    save (bool) : weather to save the sampled points in a pickel file.
+    load (boo) : weather to load the points from a pickel file with the same name as the images.
+    SIFT (bool) : weather to use SIFT features to match interest points or input the points manually.
+    
+    Returns:
+        (numpy.ndarray) : matrix of shape ((warpped_image_1.shape[0] + image_2.shape[0],
+                                            warpped_image_1.shape[1] + image_2.shape[1], 3))
+                         which is the stitched images.
+    """
+
+
     image_1 = read_image(path_1)
     image_2 = read_image(path_2)
 
@@ -224,14 +329,14 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
     else:
         if SIFT:
             image_1_points, image_2_points = automatic_intrest_points_detector(image_1, image_2, correspondance_points)
-            fig, axs = plt.subplots(1,2)
-            i_1 = np.array(image_1_points)
-            i_2 = np.array(image_2_points)
-            axs[0].imshow(image_1)
-            axs[0].scatter(i_1[:,0], i_1[:,1])
-            axs[1].imshow(image_2)
-            axs[1].scatter(i_2[:,0], i_2[:,1])
-            plt.show()
+            # fig, axs = plt.subplots(1,2)
+            # i_1 = np.array(image_1_points)
+            # i_2 = np.array(image_2_points)
+            # axs[0].imshow(image_1)
+            # axs[0].scatter(i_1[:,0], i_1[:,1])
+            # axs[1].imshow(image_2)
+            # axs[1].scatter(i_2[:,0], i_2[:,1])
+            # plt.show()
 
         else:
             image_1_points = get_points(image_1, correspondance_points)
@@ -244,21 +349,18 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
         with open(f'{image_2_name}.pkl', 'wb+') as f:
             pickle.dump(image_2_points, f)
 
-
+    # convert bgr to rgb then scale image to range [0,1)
     image_1 = image_1[...,::-1]/255
     image_2 = image_2[...,::-1]/255
 
     inlier_src, inlier_target = get_inliers(image_1_points, image_2_points)
 
-    print(len(inlier_src))
-    print(inlier_target[:,0])
-
-    fig, axs = plt.subplots(1,2)
-    axs[0].imshow(image_1)
-    axs[0].scatter(inlier_src[:,0], inlier_src[:,1])
-    axs[1].imshow(image_2)
-    axs[1].scatter(inlier_target[:,0], inlier_target[:,1])
-    plt.show()
+    # fig, axs = plt.subplots(1,2)
+    # axs[0].imshow(image_1)
+    # axs[0].scatter(inlier_src[:,0], inlier_src[:,1])
+    # axs[1].imshow(image_2)
+    # axs[1].scatter(inlier_target[:,0], inlier_target[:,1])
+    # plt.show()
 
 
 
@@ -275,7 +377,6 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
     shift_v_1 = min_v if min_v>0 else 0
 
     res[shift_v_1:warpped_image_1.shape[0]+shift_v_1, shift_u_1:warpped_image_1.shape[1]+shift_u_1, :] = warpped_image_1
-    print(min_u, min_v)
 
     shift_u_2 = -min_u if min_u<0 else 0
     shift_v_2 = -min_v if min_v<0 else 0
