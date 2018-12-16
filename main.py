@@ -34,7 +34,7 @@ def compute_homography_mat(src_points, target_points):
     A = compute_points_mat(src_points, target_points)
     b = np.ndarray.flatten(np.array(target_points))
     
-    H = np.linalg.lstsq(A, b,None)[0]
+    H = np.linalg.lstsq(A, b, None)[0]
     print(H.shape) # should be 2n x 1
     H = np.concatenate([H,[1]])
     H = H.reshape(3,3)
@@ -101,25 +101,29 @@ def warp_image(image, H):
     return target_image, min_u, min_v
                 
 def read_image(path):
-    img = plt.imread(path)
+    img = cv.imread(path)
     print(img.shape)
-    return img[:,:,:-1]
+    return img
 
-def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True):
+def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True, SIFT=False):
     image_1 = read_image(path_1)
     image_2 = read_image(path_2)
     image_1_name = path_1.split('/')[-1].split('.')[0]
     image_2_name = path_2.split('/')[-1].split('.')[0]
-    try:
-        with open(f'{image_1_name}.pkl', 'rb') as f:
-            image_1_points = pickle.load(f)
-        
-        with open(f'{image_2_name}.pkl', 'rb') as f:
-            image_2_points = pickle.load(f)
-        
-    except:
-        image_1_points = get_points(image_1, correspondance_points)
-        image_2_points = get_points(image_2, correspondance_points)
+
+    if SIFT == True:
+        image_1_points, image_2_points = automatic_intrest_points_detector(image_1, image_2)
+    else:
+        try:
+            with open(f'{image_1_name}.pkl', 'rb') as f:
+                image_1_points = pickle.load(f)
+            
+            with open(f'{image_2_name}.pkl', 'rb') as f:
+                image_2_points = pickle.load(f)
+            
+        except:
+                image_1_points = get_points(image_1, correspondance_points)
+                image_2_points = get_points(image_2, correspondance_points)
 
  
 
@@ -139,12 +143,11 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True)
 
     return res
 
-def automatic_intrest_points_detector(image1, image2, N):
+def automatic_intrest_points_detector(image1, image2, N=75):
     ###
     # image1 and image2 are the 2 images that have commen points
     # N is number of points reqired to be detected
     ###
-    
     # ORB: An efficient alternative to SIFT or SURF
     orb = cv.ORB_create() 
     
@@ -158,22 +161,54 @@ def automatic_intrest_points_detector(image1, image2, N):
     matches = sorted(matches, key=lambda x:x.distance)
     list_kps1 = [kps1[mat.queryIdx].pt for mat in matches[:N]] 
     list_kps2 = [kps2[mat.trainIdx].pt for mat in matches[:N]]
+    # print('list1 length:',list_kps1)
+    # print('list2 length:',list_kps2)
     
+    # outImage = cv.drawMatches(image1, kps1, image2, kps2, matches[:N], outImg=image2)
+    # cv.imwrite('MatchedUsingSIFT.jpg', outImage)
+
+    # print('Done SIFT')
     return list_kps1, list_kps2
 
-res = stitch_images('b1.png','b2.png' )
+# res = stitch_images('b1.png','b2.png', SIFT=True)
 
-plt.imshow(res)
-plt.show()
-
-
-
+# # cv.imwrite('MatchedUsingSIFT.jpg', res)
+# plt.imshow(res)
+# plt.show()
 
 
-# def main():
-#     building_1 = read_image('stitching_1.png')
-#     building_2 = read_image('stitching_2.png')
 
+
+
+def main():
+    building_1 = read_image('b1.png')
+    building_2 = read_image('b2.png')
+
+    building_1_points, building_2_points = automatic_intrest_points_detector(building_1, building_2)
+    plt.figure(1)
+    plt.imshow(building_1)
+    for point in building_1_points:
+        plt.scatter(point[0], point[1], c='red')
+    
+    H = compute_homography_mat(building_1_points, building_2_points)
+    plt.figure(2)
+    plt.imshow(building_2)
+    mapped_points = []
+    for point in building_1_points:
+        mapped_point1 = transform_point(point, H)
+        # mapped_point2 = transform_point([point[0] + 500, point[1] + 500], H)
+        # mapped_point3 = transform_point([point[0] + 100, point[1] + 100], H)
+
+        mapped_points.append(mapped_points)
+        
+        plt.scatter(mapped_point1[0], mapped_point1[1], c='red')
+        # plt.scatter(mapped_point2[0], mapped_point2[1], c='blue')
+        # plt.scatter(mapped_point3[0], mapped_point3[1], c='yellow')
+
+    
+    plt.show()
+
+main()
 
 #     try:
 #         with open('b1.pkl', 'rb') as f:
