@@ -301,7 +301,7 @@ def automatic_intrest_points_detector(image1, image2, N=75):
     return list_kps1, list_kps2
 
 
-def stitch_2_images(path_1, path_2, correspondance_points=5, save=True, load=True, SIFT=False):
+def stitch_2_images(path_1, path_2, correspondance_points=75, save=True, load=True, SIFT=False):
     """
     stitches 2 images.
 
@@ -375,7 +375,7 @@ def stitch_2_images(path_1, path_2, correspondance_points=5, save=True, load=Tru
               0:np.maximum(image_1.shape[1], image_2.shape[1])+700]
     return res
 
-def stitch_N_images(paths):
+def stitch_N_images(paths, correspondance_points=75):
     """
     stitches N images.
 
@@ -388,7 +388,7 @@ def stitch_N_images(paths):
     """
     N = len(paths)
     for i in range(N-1):
-        res = stitch_2_images(paths[i+1], paths[i] , 100, load=False, save=False, SIFT=True)
+        res = stitch_2_images(paths[i+1], paths[i], correspondance_points=correspondance_points, load=False, save=False, SIFT=True)
         name = 'images'+str(1)+str(2)+'.png'
         paths[i] = name
         plt.imsave(name, res)
@@ -397,10 +397,10 @@ def stitch_N_images(paths):
 
 
 # paths = ['mount1.png', 'mount2.png', 'mount3.png'] 
-paths = ['1.png', '2.png', '3.png', '4.png'] 
-# paths = ['b1.png', 'b2.png']
+# paths = ['1.png', '2.png', '3.png', '4.png'] 
+paths = ['b1.png', 'b2.png']
 
-res = stitch_N_images(paths)
+res = stitch_N_images(paths, correspondance_points=100)
 plt.imshow(res)
 plt.show()
 
