@@ -185,6 +185,29 @@ def read_image(path):
     img = cv.imread(path,1)
     return img
 
+
+def automatic_intrest_points_detector(image1, image2, N=75):
+    ###
+    # image1 and image2 are the 2 images that have commen points
+    # N is number of points reqired to be detected
+    ###
+    # ORB: An efficient alternative to SIFT or SURF
+    orb = cv.ORB_create() 
+    
+    # get key points and descriptors from the 2 images
+    kps1, descs1 = orb.detectAndCompute(image1, None)
+    kps2, descs2 = orb.detectAndCompute(image2, None)
+    
+    # brute force matcher
+    bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
+    matches = bf.match(descs1, descs2)
+    matches = sorted(matches, key=lambda x:x.distance)
+    list_kps1 = [kps1[mat.queryIdx].pt for mat in matches[:N]] 
+    list_kps2 = [kps2[mat.trainIdx].pt for mat in matches[:N]]
+
+    return list_kps1, list_kps2
+
+
 def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True, SIFT=False):
     image_1 = read_image(path_1)
     image_2 = read_image(path_2)
@@ -200,6 +223,8 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
             image_2_points = pickle.load(f)
 
     else:
+        if SIFT:
+            image_1_points, image_2_points = automatic_intrest_points_detector(image1, image2, correspondance_points)
         image_1_points = get_points(image_1, correspondance_points)
         image_2_points = get_points(image_2, correspondance_points)
     
@@ -250,35 +275,9 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
 
     return res
 
-def automatic_intrest_points_detector(image1, image2, N=75):
-    ###
-    # image1 and image2 are the 2 images that have commen points
-    # N is number of points reqired to be detected
-    ###
-    # ORB: An efficient alternative to SIFT or SURF
-    orb = cv.ORB_create() 
-    
-    # get key points and descriptors from the 2 images
-    kps1, descs1 = orb.detectAndCompute(image1, None)
-    kps2, descs2 = orb.detectAndCompute(image2, None)
-    
-    # brute force matcher
-    bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
-    matches = bf.match(descs1, descs2)
-    matches = sorted(matches, key=lambda x:x.distance)
-    list_kps1 = [kps1[mat.queryIdx].pt for mat in matches[:N]] 
-    list_kps2 = [kps2[mat.trainIdx].pt for mat in matches[:N]]
-    # print('list1 length:',list_kps1)
-    # print('list2 length:',list_kps2)
-    
-    # outImage = cv.drawMatches(image1, kps1, image2, kps2, matches[:N], outImg=image2)
-    # cv.imwrite('MatchedUsingSIFT.jpg', outImage)
-
-    # print('Done SIFT')
-    return list_kps1, list_kps2
 
 
-res = stitch_images('b1_copy.png','b2_copy.png' , 15, load=True)
+res = stitch_images('b1_copy.png','b2_copy.png' , 15, load=False, save=False, SIFT=True)
 plt.imshow(res)
 plt.show()
 # res = stitch_images('b1.png','b2.png', SIFT=True)
