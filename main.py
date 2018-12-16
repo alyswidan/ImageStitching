@@ -274,10 +274,18 @@ def read_image(path):
 
 
 def automatic_intrest_points_detector(image1, image2, N=75):
-    ###
-    # image1 and image2 are the 2 images that have commen points
-    # N is number of points reqired to be detected
-    ###
+    """
+    This function get key point from two images instead of doing it manullay
+
+
+    Args:
+        image1: first image to get key points from
+        image2: second images to get key points from
+        N: Number of points to be detected 
+
+    Returns:
+        Two lists of detected interest points from the two images
+    """
     # ORB: An efficient alternative to SIFT or SURF
     orb = cv.ORB_create() 
     
