@@ -415,7 +415,8 @@ def stitch_N_images(paths):
 
 
 
-paths = ['mount1.png', 'mount2.png', 'mount3.png'] 
+# paths = ['mount1.png', 'mount2.png', 'mount3.png'] 
+paths = ['1.png', '2.png', '3.png', '4.png'] 
 # paths = ['b1.png', 'b2.png']
 
 res = stitch_N_images(paths)
