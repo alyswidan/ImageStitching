@@ -536,13 +536,3 @@ plt.show()
 # scaler = 1/(H_inv[2,0]*x_t_hom[0] + H_inv[2,1]*x_t_hom[1] + 1)
 # print(H_inv)
 # print( scaler * H_inv.dot(x_t_hom))
-
-
-
-
-
-
-
-
-
-
