@@ -131,7 +131,6 @@ def get_inliers(src_points, target_points, d=1, s=4, N=2000, T=None):
     src_points = np.concatenate([np.expand_dims(np.array(p),0) for p in src_points if type(p) != np.ndarray],0)
     target_points = np.concatenate([np.expand_dims(np.array(p),0) for p in target_points if type(p) != np.ndarray],0)
     
-    # N = int(np.log10(1-0.99)/np.log10((1-(1-0.4)**s)))
 
     T  = min(len(src_points), 10)
 
@@ -268,16 +267,23 @@ def warp_image(image, H):
     return target_image, min_u, min_v
                 
 def read_image(path):
-    # img = cv.imread(path)
     img = cv.imread(path,1)
     return img
 
 
 def automatic_intrest_points_detector(image1, image2, N=75):
-    ###
-    # image1 and image2 are the 2 images that have commen points
-    # N is number of points reqired to be detected
-    ###
+    """
+    This function get key point from two images instead of doing it manullay
+
+
+    Args:
+        image1: first image to get key points from
+        image2: second images to get key points from
+        N: Number of points to be detected 
+
+    Returns:
+        Two lists of detected interest points from the two images
+    """
     # ORB: An efficient alternative to SIFT or SURF
     orb = cv.ORB_create() 
     
@@ -295,7 +301,7 @@ def automatic_intrest_points_detector(image1, image2, N=75):
     return list_kps1, list_kps2
 
 
-def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True, SIFT=False):
+def stitch_2_images(path_1, path_2, correspondance_points=75, save=True, load=True, SIFT=False):
     """
     stitches 2 images.
 
@@ -329,15 +335,6 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
     else:
         if SIFT:
             image_1_points, image_2_points = automatic_intrest_points_detector(image_1, image_2, correspondance_points)
-            # fig, axs = plt.subplots(1,2)
-            # i_1 = np.array(image_1_points)
-            # i_2 = np.array(image_2_points)
-            # axs[0].imshow(image_1)
-            # axs[0].scatter(i_1[:,0], i_1[:,1])
-            # axs[1].imshow(image_2)
-            # axs[1].scatter(i_2[:,0], i_2[:,1])
-            # plt.show()
-
         else:
             image_1_points = get_points(image_1, correspondance_points)
             image_2_points = get_points(image_2, correspondance_points)
@@ -354,14 +351,6 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
     image_2 = image_2[...,::-1]/255
 
     inlier_src, inlier_target = get_inliers(image_1_points, image_2_points)
-
-    # fig, axs = plt.subplots(1,2)
-    # axs[0].imshow(image_1)
-    # axs[0].scatter(inlier_src[:,0], inlier_src[:,1])
-    # axs[1].imshow(image_2)
-    # axs[1].scatter(inlier_target[:,0], inlier_target[:,1])
-    # plt.show()
-
 
 
     H = compute_homography_mat(inlier_src, inlier_target)
@@ -382,157 +371,39 @@ def stitch_images(path_1, path_2, correspondance_points=5, save=True, load=True,
     shift_v_2 = -min_v if min_v<0 else 0
     res[shift_v_2:image_2.shape[0] + shift_v_2, shift_u_2:image_2.shape[1] + shift_u_2, :] = image_2
 
+    res = res[0:np.maximum(image_1.shape[0], image_2.shape[0])+200,
+              0:np.maximum(image_1.shape[1], image_2.shape[1])+700]
+    return res
 
+def stitch_N_images(paths, correspondance_points=75):
+    """
+    stitches N images.
+
+    paths : paths to N images with know order
+    
+    Returns:
+        (numpy.ndarray) : matrix of shape ((warpped_image_1.shape[0] + image_2.shape[0],
+                                            warpped_image_1.shape[1] + image_2.shape[1], 3))
+                         which is the stitched images.
+    """
+    N = len(paths)
+    for i in range(N-1):
+        res = stitch_2_images(paths[i+1], paths[i], correspondance_points=correspondance_points, load=False, save=False, SIFT=True)
+        name = 'images'+str(1)+str(2)+'.png'
+        paths[i] = name
+        plt.imsave(name, res)
     return res
 
 
 
-res = stitch_images('b1_copy.png','b2_copy.png' , 40, load=False, save=False, SIFT=True)
+# paths = ['mount1.png', 'mount2.png', 'mount3.png'] 
+# paths = ['1.png', '2.png', '3.png', '4.png'] 
+paths = ['b1.png', 'b2.png']
+
+res = stitch_N_images(paths, correspondance_points=100)
 plt.imshow(res)
 plt.show()
-# res = stitch_images('b1.png','b2.png', SIFT=True)
-
-# # cv.imwrite('MatchedUsingSIFT.jpg', res)
-# plt.imshow(res)
-# plt.show()
 
 
 
 
-
-# def main():
-#     building_1 = read_image('b1.png')
-#     building_2 = read_image('b2.png')
-
-#     building_1_points, building_2_points = automatic_intrest_points_detector(building_1, building_2)
-#     plt.figure(1)
-#     plt.imshow(building_1)
-#     for point in building_1_points:
-#         plt.scatter(point[0], point[1], c='red')
-    
-#     H = compute_homography_mat(building_1_points, building_2_points)
-#     plt.figure(2)
-#     plt.imshow(building_2)
-#     mapped_points = []
-#     for point in building_1_points:
-#         mapped_point1 = transform_point(point, H)
-#         # mapped_point2 = transform_point([point[0] + 500, point[1] + 500], H)
-#         # mapped_point3 = transform_point([point[0] + 100, point[1] + 100], H)
-
-#         mapped_points.append(mapped_points)
-        
-#         plt.scatter(mapped_point1[0], mapped_point1[1], c='red')
-#         # plt.scatter(mapped_point2[0], mapped_point2[1], c='blue')
-#         # plt.scatter(mapped_point3[0], mapped_point3[1], c='yellow')
-
-    
-#     plt.show()
-
-# main()
-
-#     try:
-#         with open('b1.pkl', 'rb') as f:
-#             building_1_points = pickle.load(f)
-        
-#         with open('b2.pkl', 'rb') as f:
-#             building_2_points = pickle.load(f)
-        
-#     except:
-#         building_1_points = get_points(building_1,5)
-#         building_2_points = get_points(building_2,5)
-
-
-#         with open('b1.pkl','wb+') as f:
-#             pickle.dump(building_1_points,f)
-
-#         with open('b2.pkl','wb+') as f:
-#             pickle.dump(building_2_points,f)
-            
-
-   
-#     H = compute_homography_mat(building_1_points, building_2_points)
-#     # H = np.eye(3) * 1.5
-#     # H[2,2]=1
-
-
-#     plt.imshow(building_2)
-#     mapped_points = []
-#     for point in building_1_points:
-#         mapped_point1 = transform_point(point, H)
-#         mapped_point2 = transform_point([point[0] + 500, point[1] + 500], H)
-#         mapped_point3 = transform_point([point[0] + 100, point[1] + 100], H)
-
-#         mapped_points.append(mapped_points)
-        
-#         plt.scatter(mapped_point1[0], mapped_point1[1], c='red')
-#         plt.scatter(mapped_point2[0], mapped_point2[1], c='blue')
-#         plt.scatter(mapped_point3[0], mapped_point3[1], c='yellow')
-
-    
-#     plt.show()
-
-
-#     # plt.imshow(building_1)
-#     # H_inv = np.linalg.inv(H)
-
-#     # b1_points = []
-
-#     # for point in mapped_points + [[0,0]]:
-#     #     b1_point = transform_point(point, H_inv/H_inv[2,2])
-#     #     b1_points.append(b1_point)
-#     #     plt.scatter(b1_point[0], b1_point[1], c='yellow')
-
-#     # plt.show()
-
-#     try:
-#         with open('warpped.pkl', 'rb') as f:
-#             warpped_building_1, min_u, min_v = pickle.load(f)
-    
-#     except:
-#         warpped_building_1, min_u, min_v = warp_image(building_1, H)
-#         with open('warpped.pkl', 'wb+') as f:
-#             pickle.dump((warpped_building_1, min_u, min_v), f)
-        
-
-#     res = np.zeros((warpped_building_1.shape[0] + building_2.shape[0],
-#                     warpped_building_1.shape[1] + building_2.shape[1], 3))
-
-
-
-#     res[:warpped_building_1.shape[0], :warpped_building_1.shape[1], :] = warpped_building_1
-
-#     res[-min_v:-min_v + building_2.shape[0], -min_u:-min_u + building_2.shape[1], :] = building_2
-    
-#     # res[:, int(pivot[0]):, :]  = building_2[:, mapped_points[0][0]:, :]
-
-
-
-#     plt.imshow( res )
-
-#     plt.show()
-
-
-    
-    
-
-
-
-
-
-# main()
-
-# H = np.array([[ 1.96266782e-01 , -1.98196535e+00 , 4.81034471e+02],
-#  [ 1.07510522e-01 , -1.23659214e+00 , 3.14197533e+02],
-#  [ 3.24089376e-04 , -3.88242171e-03 , 1.00000000e+00]])
-    
-# # x = np.array((814.9165742210662, 317.62283151311124))
-# # x_hom = np.array((814.9165742210662, 317.62283151311124,1))
-# x_hom = np.array([0,0,1])
-# scaler = 1/(H[2,0]*x_hom[0] + H[2,1]*x_hom[1] + 1)
-# x_t_hom = scaler * H.dot(x_hom)
-# print(x_t_hom)
-# H_inv = np.linalg.inv(H)
-# H_inv = H_inv / H_inv[2,2]
-# scaler = 1/(H_inv[2,0]*x_t_hom[0] + H_inv[2,1]*x_t_hom[1] + 1)
-# print(H_inv)
-# print( scaler * H_inv.dot(x_t_hom))
