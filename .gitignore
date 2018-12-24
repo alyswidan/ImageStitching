@@ -1,5 +1,5 @@
 # images
-*.png
+#*.png
 *.jpg
 #pickle files
 *.pkl
