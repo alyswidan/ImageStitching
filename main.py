@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import RectBivariateSpline
 import pickle
-
+import argparse
 # docstring based on this https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html
 
 
@@ -106,7 +106,7 @@ def transform_points(points, H):
     return mapped_points
 
 
-def get_inliers(src_points, target_points, d=1, s=4, N=2000, T=None):
+def get_inliers(src_points, target_points, d=1, s=4, N=5000, T=None):
     """
         Uses RANSAC to find out which pairs of points from src_points 
         and target points is an inlier.
@@ -301,7 +301,7 @@ def automatic_intrest_points_detector(image1, image2, N=75):
     return list_kps1, list_kps2
 
 
-def stitch_2_images(path_1, path_2, correspondance_points=75, save=True, load=True, SIFT=False):
+def stitch_2_images(path_1, path_2, correspondance_points=75, save=False, load=False, SIFT=True, ransac=True):
     """
     stitches 2 images.
 
@@ -311,6 +311,7 @@ def stitch_2_images(path_1, path_2, correspondance_points=75, save=True, load=Tr
     save (bool) : weather to save the sampled points in a pickel file.
     load (boo) : weather to load the points from a pickel file with the same name as the images.
     SIFT (bool) : weather to use SIFT features to match interest points or input the points manually.
+    ransac(bool) : weather to use ransac or least square
     
     Returns:
         (numpy.ndarray) : matrix of shape ((warpped_image_1.shape[0] + image_2.shape[0],
@@ -350,9 +351,12 @@ def stitch_2_images(path_1, path_2, correspondance_points=75, save=True, load=Tr
     image_1 = image_1[...,::-1]/255
     image_2 = image_2[...,::-1]/255
 
-    inlier_src, inlier_target = get_inliers(image_1_points, image_2_points)
 
-
+    if ransac:
+        inlier_src, inlier_target = get_inliers(image_1_points, image_2_points)
+    else:
+        inlier_src, inlier_target = image_1_points, image_2_points
+    
     H = compute_homography_mat(inlier_src, inlier_target)
 
 
@@ -375,7 +379,7 @@ def stitch_2_images(path_1, path_2, correspondance_points=75, save=True, load=Tr
               0:np.maximum(image_1.shape[1], image_2.shape[1])+700]
     return res
 
-def stitch_N_images(paths, correspondance_points=75):
+def stitch_N_images(paths, load=False, save=False, SIFT=True, ransac=True, correspondance_points=75):
     """
     stitches N images.
 
@@ -387,20 +391,29 @@ def stitch_N_images(paths, correspondance_points=75):
                          which is the stitched images.
     """
     N = len(paths)
-    for i in range(N-1):
-        res = stitch_2_images(paths[i+1], paths[i], correspondance_points=correspondance_points, load=False, save=False, SIFT=True)
-        name = 'images'+str(1)+str(2)+'.png'
-        paths[i] = name
-        plt.imsave(name, res)
+    swap = paths[0]
+    for i in range(1,N):
+        res = stitch_2_images(paths[i], swap, correspondance_points=correspondance_points, load=load, save=save, SIFT=SIFT, ransac=True)
+        swap = 'swap.png'
+        plt.imsave(swap, res)
     return res
 
 
+parser = argparse.ArgumentParser()
+parser.add_argument( "images", nargs=2, type=str,
+                        help="list of images to stitch",
+                        default=None)
+parser.add_argument('--no_sift', action='store_false', help='weather to use sift or select points manualy.', default=True)
 
-# paths = ['mount1.png', 'mount2.png', 'mount3.png'] 
-# paths = ['1.png', '2.png', '3.png', '4.png'] 
-paths = ['b1.png', 'b2.png']
+parser.add_argument('--no_ransac', action='store_false', help='weather to use ransac to eleminate outliers.', default=True)
 
-res = stitch_N_images(paths, correspondance_points=100)
+parser.add_argument('--num_points', type=int, help='number of points to take from each image.', default=200)
+
+args = parser.parse_args()
+
+
+res = stitch_2_images(args.images[0], args.images[1], correspondance_points=args.num_points, ransac=args.no_ransac, SIFT=args.no_sift)
+
 plt.imshow(res)
 plt.show()
 
